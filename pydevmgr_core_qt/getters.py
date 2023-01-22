@@ -1,24 +1,34 @@
 
 
 
-from dataclasses import dataclass
-from typing import Any, Optional, Type
+from dataclasses import dataclass, field
+import math
+from typing import Any, List, Optional, Type
 from PyQt5 import QtWidgets 
 from PyQt5.QtWidgets import QCheckBox, QComboBox, QFrame, QMainWindow, QWidget
 from pydantic.main import BaseModel
-from pydevmgr_core_ui import BaseContainerFeedback, BaseGetter, record_getter 
+
+from pydevmgr_tools.getter import  BaseGetter, register_getter as register , get_getter_class as get_class
+from pydevmgr_tools.feedback import BaseContainerFeedback
 
 from valueparser import BaseParser, parser
 from enum import Enum, EnumMeta
 
-from pydevmgr_core_ui.getter import WidgetDataGetter
+__all__ = [
+"QtBoolCheckBoxGetter", 
+"QtBoolTextGetter", 
+"QtComboEnumGetter", 
+"QtFloatGetter", 
+"QtIntGetter", 
+"QtTextGetter",
+"QtComboStrGetter"
+]
 
-
-
-@record_getter(QtWidgets.QLineEdit, str) 
-@record_getter(QtWidgets.QLabel, str) 
+@register(QtWidgets.QLineEdit, str) 
+@register(QtWidgets.QLabel, str) 
 @dataclass
 class QtTextGetter(BaseGetter):
+    """ Getter for a Qt Object with a text() attribute (QLineEdit, QLabel) """
     parser: Optional[BaseParser] = None
     feedback: Optional[BaseContainerFeedback] = None
     def __post_init__(self):
@@ -26,15 +36,12 @@ class QtTextGetter(BaseGetter):
             self.parser = parser(self.parser)
     
     def get(self, widget: QWidget):
-
         value = widget.text()
-        
         if self.parser:
             try: 
                 value = self.parser.parse(value)
             except Exception as er:
                 if self.feedback:
-
                    self.feedback.error(widget, er) 
                 raise er # error should be raised anyway 
             else:
@@ -44,47 +51,82 @@ class QtTextGetter(BaseGetter):
 
 
 
-@record_getter(QtWidgets.QLineEdit, float) 
-@record_getter(QtWidgets.QLabel, float) 
+@register(QtWidgets.QLineEdit, float) 
+@register(QtWidgets.QLabel, float) 
 @dataclass
 class QtFloatGetter(QtTextGetter):
+    """ A getter for QT object with .text() attribute which always return a float """
     parser: Optional[BaseParser] = parser(float)
-    
-def get_func(getter: BaseGetter, widget: QWidget):
-    def get():
-        return getter.get(widget)
-    return get 
+    nan: bool = False
+    def get(self, widget: QWidget):
+        try:
+            return super().get( widget) 
+        except ValueError as er:
+            if self.nan:
+                return math.nan 
+            raise er
+ 
 
-@record_getter(QtWidgets.QLineEdit, int) 
-@record_getter(QtWidgets.QLabel, int) 
+
+@register(QtWidgets.QLineEdit, int) 
+@register(QtWidgets.QLabel, int) 
 @dataclass
-class QtIntGetter(QtTextGetter):
+class QtIntGetter(QtFloatGetter):
+    """ A getter for QT object with .text() attribute which always return a int """
     parser: Optional[BaseParser] = parser(int)
 
 
-@record_getter(QtWidgets.QLineEdit, bool) 
-@record_getter(QtWidgets.QLabel,  bool)    
+@register(QtWidgets.QLineEdit, bool) 
+@register(QtWidgets.QLabel,  bool)    
 @dataclass
 class QtBoolTextGetter(BaseGetter):
-    true_text: str = "[X]"
-    false_text: str = "[ ]"
+    """ A getter for QT object with .text() attribute which always return a int """
+    true_texts:  List = field( default_factory= ["[X]", "1", "true", "True"].copy)
+    false_texts: Optional[List] = None  #field( default_factory=["[ ]", "0", "false", "False", ""]) 
+    feedback: Optional[BaseContainerFeedback] = None
+    reverse: bool = False 
+    
+    def get(self, widget: QWidget):
+        test = self._get(widget)
+        if self.reverse:
+            return not test 
+        return test  
+    def _get(self,  widget: QWidget)-> bool:
+        text = widget.text().strip()
+        if self.false_texts is None:
+            if self.feedback: self.feedback.clear(widget, "")
+            return text in self.true_texts
+        else:
+            if text in self.true_texts:
+                if self.feedback: self.feedback.clear(widget, "")
+                return True
+            elif text in self.false_texts:
+                if self.feedback: self.feedback.clear(widget, "")
+                return False
+            er = ValueError(f"{text!r} is neaser true or false")
+            if self.feedback:
+                self.feedback.error(widget, er) 
+            raise er  
 
-    def get(self,  widget: QWidget):
-        return widget.text().strip() == self.true_text 
-
-
-@record_getter(QtWidgets.QCheckBox, bool)
+@register(QtWidgets.QCheckBox, bool)
 @dataclass
 class QtBoolCheckBoxGetter(BaseGetter):
+    """ a getter for QCheckBox """
+    reverse: bool = False 
     def get(self, widget: QCheckBox):
-        return widget.isChecked()
+        test = widget.isChecked()
+        if self.reverse:
+            return not test 
+        return  test 
 
 
 class _EmptyDefault:
     pass
-@record_getter(QtWidgets.QComboBox, Enum)
+@register(QtWidgets.QComboBox, Enum)
+@register(QtWidgets.QComboBox, EnumMeta)
 @dataclass
 class QtComboEnumGetter(BaseGetter):
+    """ A getter class for a QComboBox """
     enum: Enum
     default: Any = _EmptyDefault 
     def get(self, widget :QComboBox):
@@ -101,11 +143,10 @@ class QtComboEnumGetter(BaseGetter):
 
 
 
-
-
-@record_getter( QFrame, BaseModel)
-@record_getter( QWidget, BaseModel)
-@record_getter( QMainWindow, BaseModel)
-class QtDataGetter(WidgetDataGetter):
-    default_getter = QtTextGetter()
-
+@register(QtWidgets.QComboBox, str)
+@dataclass
+class QtComboStrGetter(BaseGetter):
+    """ A getter class for a QComboBox """
+    def get(self, widget :QComboBox):
+        index = widget.currentIndex()
+        return widget.itemText(index)

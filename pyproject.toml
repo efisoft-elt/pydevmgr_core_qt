@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "pydevmgr-core-qt"
+version = "0.6.a0"
+description = "base QT tools for pydevmgr"
+authors = ["Sylvain Guieu <sylvain.guieu@univ-grenoble-alpes.fr>"]
+readme = "README.md"
+packages = [{include = "pydevmgr_core_qt"}]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+pydevmgr-tools = {path = "../pydevmgr_tools", develop=true}
+PyQt5 = "^5.15.7"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.2.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

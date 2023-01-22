@@ -1,27 +1,47 @@
 
 
 
-from dataclasses import dataclass
-from enum import Enum
+from dataclasses import dataclass, field
+from enum import Enum, EnumMeta
 from typing import Callable, Optional, Any, Type
 
-from PyQt5.QtWidgets import QCheckBox, QFrame, QMainWindow, QWidget
+from PyQt5.QtWidgets import QCheckBox, QFrame, QLabel, QMainWindow, QWidget
 from PyQt5 import QtWidgets
 
 from valueparser import BaseParser, parser
 from pydevmgr_core_qt.getters import QtBoolTextGetter, QtTextGetter
 from pydevmgr_core_qt.style import Style, get_style
-from pydevmgr_core_ui import BaseSetter, BaseContainerFeedback, record_setter
+
+from pydevmgr_tools.setter import BaseSetter, get_setter_class as get_class ,  register_setter as register 
+from pydevmgr_tools.feedback import BaseContainerFeedback
 from typing import Tuple 
 from pydantic import BaseModel
 
-from pydevmgr_core_ui.setter import UiInterface, WidgetDataSetter
+
+__all__ = [
+"QtTextSetter",
+"QtFloatSetter", 
+"QtIntSetter", 
+"QtBoolSetter", 
+"QtCheckSetter", 
+"QtComboEnumSetter", 
+"QtIo", 
+"QtIoSetter",
+"IoGroup",
+"QtLabelEnumSetter", 
+"QtStyleSwitcher", 
+"QtTextSetter", 
+"QtComboStrSetter"
+]
 
 
-@record_setter(QtWidgets.QLineEdit, str)
-@record_setter(QtWidgets.QLabel, str)
+
+@register("QLineEdit", "str")
+@register(QtWidgets.QLineEdit, str)
+@register(QtWidgets.QLabel, str)
 @dataclass
 class QtTextSetter(BaseSetter):
+    """ A setter for any QT widget with setText() method """
     format: str = "%s"
     parser: Optional[BaseParser] = None
     feedback: Optional[BaseContainerFeedback] =None
@@ -49,15 +69,15 @@ class QtTextSetter(BaseSetter):
 
 
 
-@record_setter(QtWidgets.QLineEdit, float)
-@record_setter(QtWidgets.QLabel, float)
+@register(QtWidgets.QLineEdit, float)
+@register(QtWidgets.QLabel, float)
 @dataclass
 class QtFloatSetter(QtTextSetter):
     format: str = "%f"
     parser: BaseParser = parser(float)
 
-@record_setter(QtWidgets.QLineEdit, int)
-@record_setter(QtWidgets.QLabel, int)
+@register(QtWidgets.QLineEdit, int)
+@register(QtWidgets.QLabel, int)
 @dataclass
 class QtIntSetter(QtTextSetter):
     format: str = "%d"
@@ -65,30 +85,35 @@ class QtIntSetter(QtTextSetter):
 
 
 
-@record_setter(QtWidgets.QLineEdit, bool)
-@record_setter(QtWidgets.QLabel, bool)
+@register(QtWidgets.QLineEdit, bool)
+@register(QtWidgets.QLabel, bool)
 @dataclass
 class QtBoolSetter(BaseSetter):
     true_text: str = "[X]"
     false_text: str = "[ ]"
-    
+    reverse: bool = False 
     def set( self, widget, value) -> None:
         value = bool(value)
-        
+        if self.reverse:
+            value = not value
         if isinstance(widget, QCheckBox):
             widget.setChecked(value)
         else:
             widget.setText( self.true_text if value else self.false_text )
 
-@record_setter(QtWidgets.QCheckBox, bool)
+@register(QtWidgets.QCheckBox, bool)
 @dataclass
 class QtCheckSetter(BaseSetter):
+    reverse: bool = False
     def set( self, widget: QCheckBox, test: bool) -> None:
-        widget.setChecked( bool(test))
+        test = bool(test)
+        if self.reverse:
+            test = not test 
+        widget.setChecked( test )
 
 
-
-@record_setter(QtWidgets.QComboBox, Enum)
+@register(QtWidgets.QComboBox, EnumMeta)
+@register(QtWidgets.QComboBox, Enum)
 @dataclass
 class QtComboEnumSetter(BaseSetter):
     enum: Enum
@@ -99,7 +124,17 @@ class QtComboEnumSetter(BaseSetter):
         widget.setCurrentIndex( index + self.offset)
 
 
-@record_setter(QtWidgets.QLabel, Enum)
+@register(QtWidgets.QComboBox, str)
+@dataclass
+class QtComboStrSetter(BaseSetter):
+    offset: int = 0 
+    def set(self, widget, value):
+        index = widget.findText(value)
+        if index>=0:
+            widget.setCurrentIndex( index)
+
+@register(QtWidgets.QLabel, EnumMeta)
+@register(QtWidgets.QLabel, Enum)
 @dataclass
 class QtLabelEnumSetter(BaseSetter):
     enum: Enum
@@ -144,6 +179,9 @@ class QtIoSetter(BaseSetter):
 class IoGroup:
     input: Any
     output: Any 
+    def __iter__(self):
+        yield self.input 
+        yield self.output
 
 @dataclass
 class QtIo(BaseSetter):
@@ -165,20 +203,7 @@ class QtIo(BaseSetter):
     def set_input(self, widgets: IoGroup, value: Any) -> None:
         self.setter(widgets.input, value)
 
-
-
-class QtInterface(UiInterface):
-    widget: str
-    setter: Optional[Callable] = QtTextSetter()
-    getter: Optional[Callable] = None 
-    builder: Optional[Callable] = None 
-
-
-
-@record_setter( QFrame, BaseModel)
-@record_setter( QWidget, BaseModel)
-@record_setter( QMainWindow, BaseModel)
-class QtDataSetter(WidgetDataSetter):
-    ...
-
-
+if __name__ == "__main__":
+    class E(Enum):
+        a = 0
+    get_class(QtWidgets.QLabel, type(E))

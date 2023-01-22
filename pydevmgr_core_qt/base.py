@@ -1,15 +1,41 @@
 from PyQt5.uic.uiparser import QtWidgets
 from pydantic.main import BaseModel
 from pydevmgr_core import BaseMonitor, BaseObject
-from pydevmgr_core_ui import BaseConnector, record_ui, get_ui_class
+from pydevmgr_tools.api import BaseConnector
 from PyQt5.QtWidgets import  QWidget
 
 
-def record_qt(object_type, kind):
-    return record_ui('qt', object_type, kind)
 
-def get_qt_class(object_type, kind):
-    return get_ui_class('qt', object_type, kind) 
+qt_loockup = {}
+def register_qt( object_type, kind):
+    """ recorder for a new ui class for an object type and ui kind 
+
+    Args:
+        object_type: a valid pydevmgr BaseObject :class:`pydevmgr_core.BaseDevice`
+        kind: str widget kind for the guiven object 
+    
+    """
+    def record(cls):
+        qt_loockup[( kind, object_type)] = cls
+        return cls
+    return record
+
+def get_qt_class( object_type, kind, default=None):
+    """ Return an UI class for the given object and kind 
+
+     Args:
+        object_type: a valid pydevmgr BaseObject :class:`pydevmgr_core.BaseDevice`
+        kind: str widget kind for the guiven object 
+  
+    """
+
+    try:
+        return qt_loockup[( kind, object_type)]
+    except KeyError:
+        if default is None:
+            raise ValueError(f"Cannot find a ui handler for kind={kind} and device type={object_type}") 
+        else:
+            return default 
 
 
 class QtMonitor(BaseMonitor):
@@ -32,11 +58,6 @@ class QtMonitor(BaseMonitor):
     def stop(self, widget: QWidget):
         pass
     
-
-class BaseAppender:
-    def append(self, widget: QWidget):
-        raise NotImplementedError("append")
-
 
 class BaseRemover:
     def remove(self, widget: QWidget):

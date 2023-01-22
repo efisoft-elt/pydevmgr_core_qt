@@ -48,7 +48,4 @@ def get_style(style):
     return getattr( Style(style), "style", "")
 
 
-if __name__ == "__main__":
-    assert get_style("BAD_VALUE") == "border-color: #cc3300;"
-    assert get_style(Style.BAD_VALUE) == "border-color: #cc3300;"
 
